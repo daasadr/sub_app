@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subliminal Generator</title>
+</head>
+
+<body>
+    <div id="app">
+        <h1>Subliminal Generator</h1>
+        <div class="input-section">
+            <textarea id="goalInput" placeholder="Zadejte svůj cíl..."></textarea>
+            <button id="generateBtn">Generovat afirmace</button>
+        </div>
+        <div id="affirmations"></div>
+        <div class="audio-controls">
+            <input type="file" id="backgroundAudio" accept="audio/*">
+            <input type="range" id="voiceVolume" min="0" max="100" value="20">
+            <button id="mixAudioBtn" disabled>Mixovat audio</button>
+        </div>
+        <audio id="outputAudio" controls></audio>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
