@@ -5,22 +5,43 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Subliminal Generator</title>
+    <meta http-equiv="origin-trial" content="*">
 </head>
 
 <body>
     <div id="app">
-        <h1>Subliminal Generator</h1>
+        <h1>Generátor sublimálních afirmací</h1>
+
         <div class="input-section">
-            <textarea id="goalInput" placeholder="Zadejte svůj cíl..."></textarea>
+            <textarea id="goalInput"
+                placeholder="Zadejte svůj cíl... (např. 'Chci být sebevědomější v práci')"></textarea>
             <button id="generateBtn">Generovat afirmace</button>
         </div>
+
         <div id="affirmations"></div>
+
         <div class="audio-controls">
-            <input type="file" id="backgroundAudio" accept="audio/*">
-            <input type="range" id="voiceVolume" min="0" max="100" value="20">
-            <button id="mixAudioBtn" disabled>Mixovat audio</button>
+            <div class="voice-selection">
+                <label for="voiceSelect">Vyberte hlas:</label>
+                <select id="voiceSelect"></select>
+            </div>
+        
+            <div class="voice-settings">
+                <div class="setting">
+                    <label for="rateRange">Rychlost řeči:</label>
+                    <input type="range" id="rateRange" min="0.5" max="2" step="0.1" value="0.9">
+                    <span class="value">0.9</span>
+                </div>
+        
+                <div class="setting">
+                    <label for="pitchRange">Výška hlasu:</label>
+                    <input type="range" id="pitchRange" min="0.5" max="2" step="0.1" value="1.0">
+                    <span class="value">1.0</span>
+                </div>
+            </div>
+        
+            <button id="mixAudioBtn" disabled>Přehrát afirmace</button>
         </div>
-        <audio id="outputAudio" controls></audio>
     </div>
     <script type="module" src="/src/main.js"></script>
 </body>

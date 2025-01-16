@@ -1,0 +1,62 @@
+body {
+    font-family: Arial, sans-serif;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.input-section {
+    margin: 20px 0;
+}
+
+textarea {
+    width: 100%;
+    height: 100px;
+    margin-bottom: 10px;
+}
+
+.audio-controls {
+    margin: 20px 0;
+}
+
+.voice-selection {
+    margin-bottom: 15px;
+}
+
+.voice-selection label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+select {
+    padding: 8px;
+    width: 100%;
+    max-width: 300px;
+    margin-bottom: 10px;
+}
+
+.error {
+    color: red;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid red;
+    border-radius: 4px;
+}
+.voice-settings {
+    margin: 1rem 0;
+}
+
+.setting {
+    margin: 0.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.setting input[type="range"] {
+    width: 200px;
+}
+
+.setting .value {
+    min-width: 3em;
+}
