@@ -3,11 +3,16 @@ import Anthropic from '@anthropic-ai/sdk';
 
 class SubliminalGenerator {
     constructor() {
-        console.log('Initializing SubliminalGenerator...');
-        this.initializeComponents();
-        this.setupEventListeners();
-        this.ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY;
+    console.log('Initializing SubliminalGenerator...');
+    const elevenlabsKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+    if (!elevenlabsKey) {
+        throw new Error('ElevenLabs API klíč není nastaven');
     }
+    this.ELEVENLABS_API_KEY = elevenlabsKey;
+    
+    this.initializeComponents();
+    this.setupEventListeners();
+}
 
     initializeComponents() {
         const apiKey = import.meta.env.VITE_CLAUDE_API_KEY;
@@ -133,16 +138,35 @@ class SubliminalGenerator {
     }
 
     populateVoiceList(voices) {
-        const voiceSelect = document.getElementById('voiceSelect');
-        voiceSelect.innerHTML = '';
+    const voiceSelect = document.getElementById('voiceSelect');
+    voiceSelect.innerHTML = '';
 
-        voices.forEach(voice => {
-            const option = document.createElement('option');
-            option.value = voice.voice_id;
-            option.textContent = `${voice.name} (${voice.labels.language || 'Unknown'})`;
-            voiceSelect.appendChild(option);
-        });
+    console.log('Available voices:', voices); // Pro debug - uvidíme všechny dostupné hlasy
+
+    // Zobrazí všechny multilingual hlasy a přidá informaci o jejich vlastnostech
+    voices.forEach(voice => {
+        const option = document.createElement('option');
+        option.value = voice.voice_id;
+        
+        // Zobrazí všechny relevantní informace o hlasu
+        const labels = voice.labels || {};
+        const languageInfo = labels.language || 'multilingual';
+        const description = voice.description || '';
+        
+        option.textContent = `${voice.name} (${languageInfo}) ${description}`;
+        voiceSelect.appendChild(option);
+
+        console.log(`Added voice: ${voice.name}`, voice); // Pro debug jednotlivých hlasů
+    });
+
+    if (voiceSelect.options.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Žádné hlasy nejsou k dispozici';
+        voiceSelect.appendChild(option);
     }
+
+}
 
     async handleMixAudio() {
         console.log('Starting audio generation with ElevenLabs');
@@ -163,7 +187,7 @@ class SubliminalGenerator {
 
         try {
             const response = await fetch(
-                `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+                `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
                 {
                     method: 'POST',
                     headers: {
@@ -172,21 +196,28 @@ class SubliminalGenerator {
                     },
                     body: JSON.stringify({
                         text: affirmations,
+                        model_id: "eleven_multilingual_v2",
                         voice_settings: {
                             stability: 0.5,
-                            similarity_boost: 0.75
+                            similarity_boost: 0.75,
+                            style: 0.5,
+                        use_speaker_boost: true
                         }
                     })
                 }
             );
 
-            if (!response.ok) throw new Error('Failed to generate speech');
+            if (!response.ok) {
+            const errorText = await response.text();
+            console.error('ElevenLabs API Error:', errorText);
+            throw new Error('Failed to generate speech');
+        }
 
-            const audioBlob = await response.blob();
-            const audioUrl = URL.createObjectURL(audioBlob);
-            
-            const audio = new Audio(audioUrl);
-            audio.play();
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        const audio = new Audio(audioUrl);
+        audio.play();
 
         } catch (error) {
             console.error('Error during audio generation:', error);
