@@ -88,7 +88,7 @@ class SubliminalGenerator {
                 system: "Jsi expert na vytváření pozitivních afirmací. Odpovídej pouze samotnými afirmacemi, každou na novém řádku.",
                 messages: [{
                     role: "user",
-                    content: `Vytvoř 5 pozitivních afirmací pro tento cíl: ${goalInput.value}.`
+                    content: `Vytvoř 10 pozitivních afirmací pro tento cíl: ${goalInput.value}.`
                 }]
             });
 
