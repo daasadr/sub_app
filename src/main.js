@@ -12,6 +12,9 @@ class SubliminalGenerator {
     
     this.initializeComponents();
     this.setupEventListeners();
+
+    this.isCustomMode = false;
+    this.editMode = false;
 }
 
     initializeComponents() {
@@ -28,17 +31,33 @@ class SubliminalGenerator {
         this.audioContext = null;
         
         this.generateBtn = document.getElementById('generateBtn');
+        this.customBtn = document.getElementById('customBtn');
         this.mixAudioBtn = document.getElementById('mixAudioBtn');
         this.rateRange = document.getElementById('rateRange');
         this.pitchRange = document.getElementById('pitchRange');
         
-        if (!this.generateBtn || !this.mixAudioBtn || 
+        this.confirmBtn = document.createElement('button');
+        this.confirmBtn.id = 'confirmBtn';
+        this.confirmBtn.textContent = 'Potvrdit';
+        this.confirmBtn.style.display = 'none';
+        
+        this.editBtn = document.createElement('button');
+        this.editBtn.id = 'editBtn';
+        this.editBtn.textContent = 'Editovat';
+        this.editBtn.style.display = 'none';
+
+        const inputSection = document.querySelector('.input-section');
+        inputSection.appendChild(this.confirmBtn);
+        inputSection.appendChild(this.editBtn);
+
+        if (!this.generateBtn || !this.customBtn || !this.mixAudioBtn || 
             !this.rateRange || !this.pitchRange) {
             throw new Error('Některé elementy nebyly nalezeny v DOM');
         }
 
         this.initAudioContext();
         this.initializeElevenLabsVoices();
+        
     }
 
     setupEventListeners() {
@@ -49,11 +68,26 @@ class SubliminalGenerator {
             e.preventDefault();
             await this.handleGenerate();
         });
+
+        this.customBtn.addEventListener('click', (e) => {
+            console.log('Custom Affs button clicked');
+            e.preventDefault();
+            this.CustomAffsOn();
+        })
         
         this.mixAudioBtn.addEventListener('click', async (e) => {
             console.log('Mix button clicked');
             e.preventDefault();
             await this.handleMixAudio();
+        });
+        this.confirmBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await this.validateCustomAffirmations();
+        });
+
+        this.editBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.enterEditMode();
         });
     }
 
@@ -88,7 +122,7 @@ class SubliminalGenerator {
                 system: "Jsi expert na vytváření pozitivních afirmací. Odpovídej pouze samotnými afirmacemi, každou na novém řádku.",
                 messages: [{
                     role: "user",
-                    content: `Vytvoř 5 pozitivních afirmací pro tento cíl: ${goalInput.value}.`
+                    content: `Vytvoř 10 pozitivních afirmací pro tento cíl: ${goalInput.value}.`
                 }]
             });
 
@@ -117,6 +151,125 @@ class SubliminalGenerator {
             this.generateBtn.textContent = 'Generovat afirmace';
         }
     }
+    
+    CustomAffsOn() {
+this.isCustomMode = true;
+        const goalInput = document.getElementById('goalInput');
+        const generateBtn = document.getElementById('generateBtn');
+        
+        // Změna vzhledu a funkcí
+        goalInput.value = '';
+        goalInput.placeholder = 'Zadejte své afirmace (každou na nový řádek)';
+        generateBtn.style.display = 'none';
+        this.confirmBtn.style.display = 'inline-block';
+        this.customBtn.style.display = 'none';
+        
+        // Vyčištění předchozích afirmací
+        const affirmationsDiv = document.getElementById('affirmations');
+        affirmationsDiv.innerHTML = '';
+        this.mixAudioBtn.disabled = true;
+    }
+
+    async validateCustomAffirmations() {
+        const goalInput = document.getElementById('goalInput');
+        const affirmationsDiv = document.getElementById('affirmations');
+        const affirmations = goalInput.value.trim().split('\n');
+
+        if (!affirmations.length || !goalInput.value.trim()) {
+            alert('Prosím zadejte nějaké afirmace');
+            return;
+        }
+
+        try {
+            this.confirmBtn.disabled = true;
+            this.confirmBtn.textContent = 'Kontroluji...';
+
+            const response = await this.claude.messages.create({
+                model: "claude-3-opus-20240229",
+                max_tokens: 1000,
+                temperature: 0.7,
+                system: "Jsi expert na kontrolu pozitivních afirmací. Tvým úkolem je zkontrolovat afirmace a vrátit JSON objekt s výsledkem kontroly.",
+                messages: [{
+                    role: "user",
+                    content: `Zkontroluj tyto afirmace a vrať JSON objekt s následující strukturou:
+                    {
+                        "status": "ok" | "suggestions" | "rejected",
+                        "message": "zpráva pro uživatele",
+                        "suggestions": ["upravená afirmace 1", "upravená afirmace 2"] // pouze při status="suggestions"
+                    }
+                    
+                    Afirmace k kontrole:
+                    ${affirmations.join('\n')}`
+                }]
+            });
+
+            const result = JSON.parse(response.content[0].text);
+            
+            switch(result.status) {
+                case 'ok':
+                    this.displayValidatedAffirmations(affirmations);
+                    affirmationsDiv.innerHTML += `
+                        <p class="success-message">${result.message}</p>`;
+                    this.mixAudioBtn.disabled = false;
+                    break;
+                    
+                case 'suggestions':
+                    this.displayValidatedAffirmations(result.suggestions);
+                    affirmationsDiv.innerHTML += `
+                        <p class="suggestion-message">${result.message}</p>`;
+                    this.mixAudioBtn.disabled = false;
+                    break;
+                    
+                case 'rejected':
+                    affirmationsDiv.innerHTML = `
+                        <p class="error-message">${result.message}</p>`;
+                    this.mixAudioBtn.disabled = true;
+                    break;
+            }
+
+            if (result.status !== 'rejected') {
+                this.editBtn.style.display = 'inline-block';
+                goalInput.style.display = 'none';
+                this.confirmBtn.style.display = 'none';
+            }
+
+        } catch (error) {
+            console.error('Error during validation:', error);
+            affirmationsDiv.innerHTML = `
+                <p class="error">
+                    Nastala chyba při kontrole afirmací: ${error.message}
+                </p>`;
+        } finally {
+            this.confirmBtn.disabled = false;
+            this.confirmBtn.textContent = 'Potvrdit';
+        }
+    }
+
+    displayValidatedAffirmations(affirmations) {
+        const affirmationsDiv = document.getElementById('affirmations');
+        affirmationsDiv.innerHTML = affirmations
+            .map(aff => `<p>${aff}</p>`)
+            .join('');
+    }
+
+    enterEditMode() {
+        const goalInput = document.getElementById('goalInput');
+        const affirmationsDiv = document.getElementById('affirmations');
+        
+        // Získat současné afirmace
+        const currentAffirmations = Array.from(affirmationsDiv.getElementsByTagName('p'))
+            .map(p => p.textContent)
+            .filter(text => !text.includes('message')); // Filtruje případné zprávy o stavu
+        
+        // Přepnout zpět do režimu editace
+        goalInput.style.display = 'block';
+        goalInput.value = currentAffirmations.join('\n');
+        this.confirmBtn.style.display = 'inline-block';
+        this.editBtn.style.display = 'none';
+        affirmationsDiv.innerHTML = '';
+        this.mixAudioBtn.disabled = true;
+    }
+
 
     async initializeElevenLabsVoices() {
         console.log('ElevenLabs API Key:', this.ELEVENLABS_API_KEY ? 'Exists' : 'Missing');
