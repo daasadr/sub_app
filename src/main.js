@@ -15,7 +15,8 @@ class SubliminalGenerator {
 
     this.isCustomMode = false;
     this.editMode = false;
-     this.suggestedAffirmations = null;
+    this.suggestedAffirmations = null;
+    this.currentAudio = null; 
 }
 
     initializeComponents() {
@@ -176,22 +177,32 @@ class SubliminalGenerator {
     }
     
     CustomAffsOn() {
-this.isCustomMode = true;
+        this.isCustomMode = true;
         const goalInput = document.getElementById('goalInput');
         const generateBtn = document.getElementById('generateBtn');
         
-        // Změna vzhledu a funkcí
         goalInput.value = '';
+        goalInput.style.display = 'block'; 
         goalInput.placeholder = 'Zadejte své afirmace (každou na nový řádek)';
+        
         generateBtn.style.display = 'none';
         this.confirmBtn.style.display = 'inline-block';
         this.customBtn.style.display = 'none';
         this.switchToAIBtn.style.display = 'inline-block';
+        this.applySuggestionsBtn.style.display = 'none';
+        this.editBtn.style.display = 'none';
+
+        // Reset audio
+        this.mixAudioBtn.disabled = true;
+        const audioPlayerContainer = document.getElementById('audioPlayerContainer');
+        if (audioPlayerContainer) {
+            audioPlayerContainer.innerHTML = '';
+        }
 
         // Vyčištění předchozích afirmací
         const affirmationsDiv = document.getElementById('affirmations');
         affirmationsDiv.innerHTML = '';
-        this.mixAudioBtn.disabled = true;
+        this.suggestedAffirmations = null;
     }
     
     switchToAIMode() {
@@ -201,18 +212,27 @@ this.isCustomMode = true;
         
         // Reset UI
         goalInput.value = '';
+        goalInput.style.display = 'block';
         goalInput.placeholder = 'Zadejte svůj cíl... (např. \'Chci být sebevědomější v práci\')';
+        
         generateBtn.style.display = 'inline-block';
         this.confirmBtn.style.display = 'none';
         this.customBtn.style.display = 'inline-block';
         this.switchToAIBtn.style.display = 'none';
         this.applySuggestionsBtn.style.display = 'none';
+        this.editBtn.style.display = 'none';
+
+        this.mixAudioBtn.disabled = true;
+        const audioPlayerContainer = document.getElementById('audioPlayerContainer');
+        if (audioPlayerContainer) {
+        audioPlayerContainer.innerHTML = '';
+        }
         
         // Vyčištění
         const affirmationsDiv = document.getElementById('affirmations');
         affirmationsDiv.innerHTML = '';
         this.suggestedAffirmations = null;
-        this.mixAudioBtn.disabled = true;
+        
     }
 
     async validateCustomAffirmations() {
@@ -303,22 +323,35 @@ this.isCustomMode = true;
         const affirmationsDiv = document.getElementById('affirmations');
         affirmationsDiv.innerHTML = '';
 
+        // Kontejner pro samotné afirmace
         const affirmationsContainer = document.createElement('div');
         affirmationsContainer.className = 'affirmations-container';
+        // Přidáme data atribut pro snadnou identifikaci
+        affirmationsContainer.setAttribute('data-content-type', 'affirmations');
+
+        // Kontejner pro návrhy a zprávy
+        const suggestionsContainer = document.createElement('div');
+        suggestionsContainer.className = 'suggestions-container';
+        suggestionsContainer.setAttribute('data-content-type', 'suggestions');
 
         originals.forEach((aff, index) => {
             const suggestion = suggestions.find(s => s.original === aff);
             
+            // Samotná afirmace
             const affDiv = document.createElement('div');
-            affDiv.className = 'affirmation-pair';
+            affDiv.className = 'affirmation-item';
             
             const originalP = document.createElement('p');
             originalP.textContent = aff;
-            originalP.className = 'original-affirmation';
-            
+            originalP.className = 'affirmation';
             affDiv.appendChild(originalP);
+            affirmationsContainer.appendChild(affDiv);
             
+            // Pokud existuje návrh, přidáme ho do container pro návrhy
             if (suggestion) {
+                const suggestionDiv = document.createElement('div');
+                suggestionDiv.className = 'suggestion-item';
+                
                 const suggestedP = document.createElement('p');
                 suggestedP.textContent = `Návrh: ${suggestion.suggested}`;
                 suggestedP.className = 'suggested-affirmation';
@@ -327,15 +360,44 @@ this.isCustomMode = true;
                 reasonP.textContent = suggestion.reason;
                 reasonP.className = 'suggestion-reason';
                 
-                affDiv.appendChild(suggestedP);
-                affDiv.appendChild(reasonP);
+                suggestionDiv.appendChild(suggestedP);
+                suggestionDiv.appendChild(reasonP);
+                suggestionsContainer.appendChild(suggestionDiv);
             }
-            
-            affirmationsContainer.appendChild(affDiv);
         });
 
+        // Nejdřív přidá afirmace
         affirmationsDiv.appendChild(affirmationsContainer);
+        // Pak přidá návrhy
+        affirmationsDiv.appendChild(suggestionsContainer);
     }
+
+    getAffirmationsForAudio() {
+    // Nejprve zkontrolujeme, jestli existují afirmace v DOM
+    const affirmationsDiv = document.getElementById('affirmations');
+    if (!affirmationsDiv) return [];
+
+    // Pokusíme se najít afirmace v různých možných strukturách
+    let affirmations = [];
+
+    // 1. Pokus - hledání v container struktuře (pro validované/upravené afirmace)
+    const affirmationsContainer = affirmationsDiv.querySelector('.affirmations-container');
+    if (affirmationsContainer) {
+        affirmations = Array.from(affirmationsContainer.querySelectorAll('.affirmation'))
+            .map(el => el.textContent)
+            .filter(text => text && text.trim());
+    }
+
+    // 2. Pokus - přímé paragraph elementy (pro AI generované afirmace)
+    if (affirmations.length === 0) {
+        affirmations = Array.from(affirmationsDiv.querySelectorAll('p'))
+            .map(el => el.textContent)
+            .filter(text => text && text.trim() && !text.startsWith('Návrh:') && !text.includes('Nastala chyba'));
+    }
+
+    console.log('Found affirmations:', affirmations); // Pro debugování
+    return affirmations;
+}
 
     applySuggestions() {
         if (!this.suggestedAffirmations) return;
@@ -439,11 +501,9 @@ this.isCustomMode = true;
 
     async handleMixAudio() {
         console.log('Starting audio generation with ElevenLabs');
-        const affirmations = Array.from(document.getElementById('affirmations').getElementsByTagName('p'))
-            .map(p => p.textContent)
-            .join('. ');
-
-        if (!affirmations) {
+        const affirmations = this.getAffirmationsForAudio();
+        
+        if (!affirmations.length) {
             alert('Nejdřív vygenerujte afirmace.');
             return;
         }
@@ -464,13 +524,13 @@ this.isCustomMode = true;
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        text: affirmations,
+                        text: affirmations.join('. '),
                         model_id: "eleven_multilingual_v2",
                         voice_settings: {
                             stability: 0.5,
                             similarity_boost: 0.75,
                             style: 0.5,
-                        use_speaker_boost: true
+                            use_speaker_boost: true
                         }
                     })
                 }
@@ -485,13 +545,60 @@ this.isCustomMode = true;
         const audioBlob = await response.blob();
         const audioUrl = URL.createObjectURL(audioBlob);
         
-        const audio = new Audio(audioUrl);
-        audio.play();
+        this.setupAudioPlayer(audioUrl, audioBlob);
 
         } catch (error) {
             console.error('Error during audio generation:', error);
             alert('Nastala chyba při generování audia.');
+        } finally {
+            this.hideLoadingState();
         }
+    }
+
+    showLoadingState() {
+        const loadingDiv = document.getElementById('loadingState');
+        loadingDiv.innerHTML = `
+            <div class="loading-spinner"></div>
+            <p>Vyčkejte prosím, Vaše audio se připravuje...</p>
+        `;
+        loadingDiv.style.display = 'flex';
+        this.mixAudioBtn.disabled = true;
+    }
+
+    hideLoadingState() {
+        document.getElementById('loadingState').style.display = 'none';
+        this.mixAudioBtn.disabled = false;
+    }
+     setupAudioPlayer(audioUrl, audioBlob) {
+        // Odstranění předchozího přehrávače, pokud existuje
+        const oldPlayer = document.getElementById('audioPlayer');
+        if (oldPlayer) {
+            oldPlayer.remove();
+        }
+
+        const playerContainer = document.getElementById('audioPlayerContainer');
+        playerContainer.innerHTML = `
+            <div class="audio-player">
+                <audio id="audioPlayer" controls>
+                    <source src="${audioUrl}" type="audio/mpeg">
+                    Váš prohlížeč nepodporuje přehrávání audia.
+                </audio>
+                <button id="downloadBtn" class="download-btn">Stáhnout audio</button>
+            </div>
+        `;
+
+        // Nastavení přehrávače
+        this.currentAudio = document.getElementById('audioPlayer');
+        
+        // Přidání tlačítka pro stažení
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            const downloadLink = document.createElement('a');
+            downloadLink.href = audioUrl;
+            downloadLink.download = 'afirmace.mp3'; // Název souboru pro stažení
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        });
     }
 }
 
