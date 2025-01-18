@@ -12,6 +12,10 @@ class SubliminalGenerator {
     
     this.initializeComponents();
     this.setupEventListeners();
+
+    this.isCustomMode = false;
+    this.editMode = false;
+     this.suggestedAffirmations = null;
 }
 
     initializeComponents() {
@@ -28,17 +32,45 @@ class SubliminalGenerator {
         this.audioContext = null;
         
         this.generateBtn = document.getElementById('generateBtn');
+        this.customBtn = document.getElementById('customBtn');
         this.mixAudioBtn = document.getElementById('mixAudioBtn');
         this.rateRange = document.getElementById('rateRange');
         this.pitchRange = document.getElementById('pitchRange');
         
-        if (!this.generateBtn || !this.mixAudioBtn || 
+        this.confirmBtn = document.createElement('button');
+        this.confirmBtn.id = 'confirmBtn';
+        this.confirmBtn.textContent = 'Potvrdit';
+        this.confirmBtn.style.display = 'none';
+        
+        this.editBtn = document.createElement('button');
+        this.editBtn.id = 'editBtn';
+        this.editBtn.textContent = 'Editovat';
+        this.editBtn.style.display = 'none';
+
+         this.switchToAIBtn = document.createElement('button');
+        this.switchToAIBtn.id = 'switchToAIBtn';
+        this.switchToAIBtn.textContent = 'Přepnout na AI generování';
+        this.switchToAIBtn.style.display = 'none';
+
+        this.applySuggestionsBtn = document.createElement('button');
+        this.applySuggestionsBtn.id = 'applySuggestionsBtn';
+        this.applySuggestionsBtn.textContent = 'Aplikovat navrhované úpravy';
+        this.applySuggestionsBtn.style.display = 'none';
+
+        const inputSection = document.querySelector('.input-section');
+        inputSection.appendChild(this.confirmBtn);
+        inputSection.appendChild(this.editBtn);
+        inputSection.appendChild(this.switchToAIBtn);
+        inputSection.appendChild(this.applySuggestionsBtn);
+
+        if (!this.generateBtn || !this.customBtn || !this.mixAudioBtn || 
             !this.rateRange || !this.pitchRange) {
             throw new Error('Některé elementy nebyly nalezeny v DOM');
         }
 
         this.initAudioContext();
         this.initializeElevenLabsVoices();
+        
     }
 
     setupEventListeners() {
@@ -49,11 +81,36 @@ class SubliminalGenerator {
             e.preventDefault();
             await this.handleGenerate();
         });
+
+        this.customBtn.addEventListener('click', (e) => {
+            console.log('Custom Affs button clicked');
+            e.preventDefault();
+            this.CustomAffsOn();
+        })
         
         this.mixAudioBtn.addEventListener('click', async (e) => {
             console.log('Mix button clicked');
             e.preventDefault();
             await this.handleMixAudio();
+        });
+        this.confirmBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await this.validateCustomAffirmations();
+        });
+
+        this.editBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.enterEditMode();
+        });
+
+        this.switchToAIBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.switchToAIMode();
+        });
+
+        this.applySuggestionsBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.applySuggestions();
         });
     }
 
@@ -117,6 +174,218 @@ class SubliminalGenerator {
             this.generateBtn.textContent = 'Generovat afirmace';
         }
     }
+    
+    CustomAffsOn() {
+this.isCustomMode = true;
+        const goalInput = document.getElementById('goalInput');
+        const generateBtn = document.getElementById('generateBtn');
+        
+        // Změna vzhledu a funkcí
+        goalInput.value = '';
+        goalInput.placeholder = 'Zadejte své afirmace (každou na nový řádek)';
+        generateBtn.style.display = 'none';
+        this.confirmBtn.style.display = 'inline-block';
+        this.customBtn.style.display = 'none';
+        this.switchToAIBtn.style.display = 'inline-block';
+
+        // Vyčištění předchozích afirmací
+        const affirmationsDiv = document.getElementById('affirmations');
+        affirmationsDiv.innerHTML = '';
+        this.mixAudioBtn.disabled = true;
+    }
+    
+    switchToAIMode() {
+        this.isCustomMode = false;
+        const goalInput = document.getElementById('goalInput');
+        const generateBtn = document.getElementById('generateBtn');
+        
+        // Reset UI
+        goalInput.value = '';
+        goalInput.placeholder = 'Zadejte svůj cíl... (např. \'Chci být sebevědomější v práci\')';
+        generateBtn.style.display = 'inline-block';
+        this.confirmBtn.style.display = 'none';
+        this.customBtn.style.display = 'inline-block';
+        this.switchToAIBtn.style.display = 'none';
+        this.applySuggestionsBtn.style.display = 'none';
+        
+        // Vyčištění
+        const affirmationsDiv = document.getElementById('affirmations');
+        affirmationsDiv.innerHTML = '';
+        this.suggestedAffirmations = null;
+        this.mixAudioBtn.disabled = true;
+    }
+
+    async validateCustomAffirmations() {
+        const goalInput = document.getElementById('goalInput');
+        const affirmationsDiv = document.getElementById('affirmations');
+        const affirmations = goalInput.value.trim().split('\n').filter(aff => aff.trim());
+
+        if (!affirmations.length) {
+            alert('Prosím zadejte nějaké afirmace');
+            return;
+        }
+
+        try {
+            this.confirmBtn.disabled = true;
+            this.confirmBtn.textContent = 'Kontroluji...';
+
+            const response = await this.claude.messages.create({
+                model: "claude-3-opus-20240229",
+                max_tokens: 1000,
+                temperature: 0.7,
+                system: "Jsi expert na kontrolu pozitivních afirmací. Tvým úkolem je zkontrolovat afirmace a vrátit JSON objekt s výsledkem kontroly.",
+                messages: [{
+                    role: "user",
+                    content: `Zkontroluj tyto afirmace a vrať JSON objekt s následující strukturou:
+                    {
+                        "status": "ok" | "suggestions" | "rejected",
+                        "message": "zpráva pro uživatele",
+                        "suggestions": [
+                            {
+                                "original": "původní afirmace",
+                                "suggested": "navrhovaná úprava",
+                                "reason": "důvod úpravy"
+                            }
+                        ] // pouze při status="suggestions"
+                    }
+                    
+                    Afirmace k kontrole:
+                    ${affirmations.join('\n')}`
+                }]
+            });
+
+            const result = JSON.parse(response.content[0].text);
+            
+            switch(result.status) {
+                 case 'ok':
+                    this.displayValidatedAffirmations(affirmations);
+                    this.displayMessage(result.message, 'success-message');
+                    this.mixAudioBtn.disabled = false;
+                    break;
+                    
+                case 'suggestions':
+                    this.suggestedAffirmations = result.suggestions;
+                    this.displayAffirmationsWithSuggestions(affirmations, result.suggestions);
+                    this.displayMessage(result.message, 'suggestion-message');
+                    this.applySuggestionsBtn.style.display = 'inline-block';
+                    this.mixAudioBtn.disabled = false;
+                    break;
+                    
+                case 'rejected':
+                    this.displayMessage(result.message, 'error-message');
+                    this.mixAudioBtn.disabled = true;
+                    return;
+            }
+
+            if (result.status !== 'rejected') {
+                this.editBtn.style.display = 'inline-block';
+                goalInput.style.display = 'none';
+                this.confirmBtn.style.display = 'none';
+            }
+
+         } catch (error) {
+            console.error('Error during validation:', error);
+            this.displayMessage(`Nastala chyba při kontrole afirmací: ${error.message}`, 'error');
+        } finally {
+            this.confirmBtn.disabled = false;
+            this.confirmBtn.textContent = 'Potvrdit';
+        }
+    }
+
+     displayMessage(message, className) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = className;
+        messageDiv.textContent = message;
+        document.getElementById('affirmations').appendChild(messageDiv);
+    }
+
+    displayAffirmationsWithSuggestions(originals, suggestions) {
+        const affirmationsDiv = document.getElementById('affirmations');
+        affirmationsDiv.innerHTML = '';
+
+        const affirmationsContainer = document.createElement('div');
+        affirmationsContainer.className = 'affirmations-container';
+
+        originals.forEach((aff, index) => {
+            const suggestion = suggestions.find(s => s.original === aff);
+            
+            const affDiv = document.createElement('div');
+            affDiv.className = 'affirmation-pair';
+            
+            const originalP = document.createElement('p');
+            originalP.textContent = aff;
+            originalP.className = 'original-affirmation';
+            
+            affDiv.appendChild(originalP);
+            
+            if (suggestion) {
+                const suggestedP = document.createElement('p');
+                suggestedP.textContent = `Návrh: ${suggestion.suggested}`;
+                suggestedP.className = 'suggested-affirmation';
+                
+                const reasonP = document.createElement('p');
+                reasonP.textContent = suggestion.reason;
+                reasonP.className = 'suggestion-reason';
+                
+                affDiv.appendChild(suggestedP);
+                affDiv.appendChild(reasonP);
+            }
+            
+            affirmationsContainer.appendChild(affDiv);
+        });
+
+        affirmationsDiv.appendChild(affirmationsContainer);
+    }
+
+    applySuggestions() {
+        if (!this.suggestedAffirmations) return;
+        
+        const affirmations = document.querySelectorAll('.original-affirmation');
+        const updatedAffirmations = Array.from(affirmations).map(aff => {
+            const original = aff.textContent;
+            const suggestion = this.suggestedAffirmations.find(s => s.original === original);
+            return suggestion ? suggestion.suggested : original;
+        });
+        
+        this.displayValidatedAffirmations(updatedAffirmations);
+        this.applySuggestionsBtn.style.display = 'none';
+    }
+
+     displayValidatedAffirmations(affirmations) {
+        const affirmationsDiv = document.getElementById('affirmations');
+        const affirmationsContainer = document.createElement('div');
+        affirmationsContainer.className = 'affirmations-container';
+        
+        affirmations.forEach(aff => {
+            const p = document.createElement('p');
+            p.className = 'affirmation';
+            p.textContent = aff;
+            affirmationsContainer.appendChild(p);
+        });
+        
+        affirmationsDiv.innerHTML = '';
+        affirmationsDiv.appendChild(affirmationsContainer);
+    }
+
+    enterEditMode() {
+       const goalInput = document.getElementById('goalInput');
+        const affirmationsDiv = document.getElementById('affirmations');
+        
+        // Získat současné afirmace
+        const currentAffirmations = Array.from(
+            affirmationsDiv.getElementsByClassName('affirmation')
+        ).map(p => p.textContent);
+        
+        // Přepnout zpět do režimu editace
+        goalInput.style.display = 'block';
+        goalInput.value = currentAffirmations.join('\n');
+        this.confirmBtn.style.display = 'inline-block';
+        this.editBtn.style.display = 'none';
+        this.applySuggestionsBtn.style.display = 'none';
+        affirmationsDiv.innerHTML = '';
+        this.mixAudioBtn.disabled = true;
+    }
+
 
     async initializeElevenLabsVoices() {
         console.log('ElevenLabs API Key:', this.ELEVENLABS_API_KEY ? 'Exists' : 'Missing');
